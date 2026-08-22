@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.taskflow/
+
+# Environment files
+.env
+
+# Node
+node_modules/

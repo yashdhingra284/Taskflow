@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.env
+node_modules/
+.venv/
+venv/
+image copy 2.png
+image copy 3.png
+image copy 4.png
+image copy.png
+image.png
+MixCollage-07-Aug-2026-02-08-PM-8086.jpg
+thingstobedonelater.txt
