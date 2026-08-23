@@ -10,3 +10,6 @@ venv/
 
 # Node
 node_modules/
+
+# databse-backup
+*.dump
