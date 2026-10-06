@@ -127,6 +127,20 @@ export function Navbar({ onCreateTask }) {
             >
               Tasks
             </NavLink>
+
+            <NavLink
+              to="/categories"
+              className={({ isActive }) =>
+                cn(
+                  'rounded-lg px-3.5 py-2 text-sm font-semibold transition-colors',
+                  isActive
+                    ? 'bg-brand-50 text-brand-700'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                )
+              }
+            >
+              Categories
+            </NavLink>
           </nav>
           <button
             type="button"

@@ -2,11 +2,13 @@ from fastapi import FastAPI, HTTPException, status
 from app.database import getConnection
 from app.models import userRegistration
 from app.models import userLogin
-from app.models import createTask
+from app.models import createTask, CategoryCreate, CategoryRename
 from app.models import PasswordUpdate
 from app.auth import create_access_token
 from app.auth import verify_access_token
 from fastapi import Depends
+from datetime import datetime, timedelta
+from app.scheduler import scheduler
 import bcrypt
 
 import logging
@@ -21,6 +23,10 @@ from fastapi import Query
 
 
 app = FastAPI()
+@app.on_event("startup")
+def start_scheduler():
+    scheduler.start()
+    print("[Scheduler] Started")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["https://taskflow-frontend-vi25.onrender.com",
@@ -37,6 +43,57 @@ def testdb():
     conn = getConnection()
     conn.close()
     return {"Message":"Database-Connected"}
+
+def create_task_notifications(cursor, user_id, task_id, title, due_date):
+    if not due_date:
+        return
+
+    now = datetime.now()
+
+    notifications = [
+        (
+            "DUE_TOMORROW",
+            f'"{title}" is due tomorrow.',
+            due_date - timedelta(days=1)
+        ),
+        (
+            "DUE_SOON",
+            f'"{title}" is due in 1 hour.',
+            due_date - timedelta(hours=1)
+        ),
+        (
+            "DUE_NOW",
+            f'"{title}" is due now.',
+            due_date
+        )
+    ]
+
+    for notification_type, message, scheduled_at in notifications:
+
+        # Do not create notifications whose scheduled time has already passed.
+        if scheduled_at <= now:
+            continue
+
+        cursor.execute(
+            """
+            INSERT INTO notifications
+            (
+                user_id,
+                task_id,
+                type,
+                message,
+                scheduled_at
+            )
+            VALUES (%s, %s, %s, %s, %s)
+            """,
+            (
+                user_id,
+                task_id,
+                notification_type,
+                message,
+                scheduled_at
+            )
+        )
 
 # ZEROTH ENDPOINT
 @app.get("/users/me")
@@ -216,34 +273,99 @@ def userlogin(user: userLogin):
 
 # THIRD ENDPOINT
 @app.post("/createTask")
-def create_new_task(taskobject:createTask,
-    user_id:int = Depends(verify_access_token)
+def create_new_task(
+    taskobject: createTask,
+    user_id: int = Depends(verify_access_token)
 ):
+    conn = None
+    cursor = None
+
     try:
         conn = getConnection()
         cursor = conn.cursor()
-        cursor.execute("INSERT INTO tasks (title, description, priority, due_date, status, user_id, cat_id) VALUES (%s,%s,%s,%s,%s,%s,%s)",
-                    (taskobject.title, taskobject.description, taskobject.priority, taskobject.due_date, taskobject.status, user_id, taskobject.cat_id))
+
+        # Check whether the category belongs to the logged-in user
+        cursor.execute(
+            """
+            SELECT cat_id
+            FROM categories
+            WHERE cat_id = %s
+            AND user_id = %s
+            """,
+            (taskobject.cat_id, user_id)
+        )
+
+        category = cursor.fetchone()
+
+        if not category:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You cannot create a task under a category that does not belong to you."
+            )
+
+        # Create the task
+        cursor.execute(
+            """
+            INSERT INTO tasks
+            (
+                title,
+                description,
+                priority,
+                due_date,
+                status,
+                user_id,
+                cat_id
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING task_id
+            """,
+            (
+                taskobject.title,
+                taskobject.description,
+                taskobject.priority,
+                taskobject.due_date,
+                taskobject.status,
+                user_id,
+                taskobject.cat_id
+            )
+        )
+
+        task_id = cursor.fetchone()[0]
+
+        create_task_notifications(
+            cursor,
+            user_id,
+            task_id,
+            taskobject.title,
+            taskobject.due_date
+        )
+
         conn.commit()
+
         return {
-            "message":"Task Created Successfully"
+            "message": "Task Created Successfully"
         }
+
     except HTTPException:
+        if conn:
+            conn.rollback()
         raise
 
     except Exception as e:
         if conn:
             conn.rollback()
-        
+
         print(e)
+
         raise HTTPException(
-            status_code = status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail = "Internal Server Error"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal Server Error"
         )
-    
+
     finally:
         if cursor:
             cursor.close()
+
         if conn:
             conn.close()
 
@@ -467,54 +589,137 @@ def get_task_by_id(task_id:int, user_id:int = Depends(verify_access_token)):
 
 # SIXTH ENDPOINT
 @app.put("/update_task/{task_id}")
-def update_task_by_id(task_id: int, update_Task: createTask, user_id:int = Depends(verify_access_token)):
+def update_task_by_id(
+    task_id: int,
+    update_Task: createTask,
+    user_id: int = Depends(verify_access_token)
+):
+    conn = None
+    cursor = None
+
     try:
         conn = getConnection()
         cursor = conn.cursor()
-        cursor.execute("""UPDATE tasks
-                    SET
-                    title = %s,
-                    description = %s,
-                    priority = %s,
-                    due_date = %s,
-                    status = %s,
-                    cat_id = %s,
-                    updated_at = CURRENT_TIMESTAMP
-                    WHERE task_id = %s
-                    AND
-                    user_id = %s""", (update_Task.title, update_Task.description, update_Task.priority, update_Task.due_date, update_Task.status, update_Task.cat_id, task_id,user_id,)
-                    )
-        
-        # what if the task_id does not exist in previous endpoint we came to know about this by fetchone() not having
-        # any response but here there is no fetchone() so to know if something is updated or not we use 'rowcount' 
 
-        # rowcount tells us how many rows were altered by the update query if no row was altered then it means id does
-        # not exists and we can raise 404 error.
-        if cursor.rowcount == 0:
+        # 1. Check whether the category belongs to the logged-in user
+        cursor.execute(
+            """
+            SELECT cat_id
+            FROM categories
+            WHERE cat_id = %s
+            AND user_id = %s
+            """,
+            (update_Task.cat_id, user_id)
+        )
+
+        category = cursor.fetchone()
+
+        if not category:
             raise HTTPException(
-                status_code = status.HTTP_404_NOT_FOUND,
-                detail = "Task ID Not Found"
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You cannot use a category that does not belong to you."
             )
+
+        # 2. Check whether the task exists and belongs to the logged-in user
+        cursor.execute(
+            """
+            SELECT task_id
+            FROM tasks
+            WHERE task_id = %s
+            AND user_id = %s
+            """,
+            (task_id, user_id)
+        )
+
+        existing_task = cursor.fetchone()
+
+        if not existing_task:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Task ID Not Found"
+            )
+
+        # 3. Update the task
+        cursor.execute(
+            """
+            UPDATE tasks
+            SET
+                title = %s,
+                description = %s,
+                priority = %s,
+                due_date = %s,
+                status = %s,
+                cat_id = %s,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE task_id = %s
+            AND user_id = %s
+            """,
+            (
+                update_Task.title,
+                update_Task.description,
+                update_Task.priority,
+                update_Task.due_date,
+                update_Task.status,
+                update_Task.cat_id,
+                task_id,
+                user_id
+            )
+        )
+
+        # 4. Remove all pending notifications for this task
+        # Already-sent notifications are kept as history.
+        cursor.execute(
+            """
+            DELETE FROM notifications
+            WHERE task_id = %s
+            AND sent_at IS NULL
+            """,
+            (task_id,)
+        )
+
+        # 5. Create new notifications only if:
+        #    - task has a deadline
+        #    - task is not completed
+        if (
+            update_Task.due_date is not None
+            and update_Task.status != "Completed"
+        ):
+            create_task_notifications(
+                cursor,
+                user_id,
+                task_id,
+                update_Task.title,
+                update_Task.due_date
+            )
+
+        # 6. Commit task update + notification changes together
         conn.commit()
 
-        cursor.execute(""" SELECT
-                            t.task_id,
-                            t.title,
-                            t.description,
-                            t.priority,
-                            t.due_date,
-                            t.status,
-                            c.cat_name,
-                            t.cat_id,
-                            t.created_at,
-                            t.updated_at
-                            FROM tasks t
-                            LEFT JOIN categories c
-                            ON t.cat_id = c.cat_id
-                            WHERE t.task_id = %s
-                            AND t.user_id = %s
-                            """,(task_id,user_id))
+        # 7. Get the updated task
+        cursor.execute(
+            """
+            SELECT
+                t.task_id,
+                t.title,
+                t.description,
+                t.priority,
+                t.due_date,
+                t.status,
+                c.cat_name,
+                t.cat_id,
+                t.created_at,
+                t.updated_at
+            FROM tasks t
+            LEFT JOIN categories c
+                ON t.cat_id = c.cat_id
+            WHERE t.task_id = %s
+            AND t.user_id = %s
+            """,
+            (task_id, user_id)
+        )
+
         response = cursor.fetchone()
+
         frontend_response = {
             "task_id": response[0],
             "title": response[1],
@@ -523,28 +728,37 @@ def update_task_by_id(task_id: int, update_Task: createTask, user_id:int = Depen
             "due_date": response[4],
             "status": response[5],
             "cat_name": response[6],
-            "cat_id":response[7],
+            "cat_id": response[7],
             "created_at": response[8],
             "updated_at": response[9]
         }
 
         return frontend_response
+
     except HTTPException:
+        if conn:
+            conn.rollback()
         raise
+
     except Exception as e:
         if conn:
             conn.rollback()
+
         print(e)
+
         raise HTTPException(
-            status_code = status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail = "Internal Server Error"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal Server Error"
         )
+
     finally:
         if cursor:
             cursor.close()
+
         if conn:
             conn.close()
 
+            
 # SEVENTH ENDPOINT
 @app.delete("/delete_task/{task_id}")
 def delete_by_task_id(task_id:int, user_id:int = Depends(verify_access_token)):
@@ -696,46 +910,175 @@ def search_task(
         if conn:
             conn.close()
 
-# GET CATEGORIES END POINT
-@app.get("/get_category")
-def get_category():
+# CREATE CATEGORY ENDPOINT
+@app.post("/create_category")
+def create_category(
+    category: CategoryCreate,
+    user_id: int = Depends(verify_access_token)
+):
     conn = None
     cursor = None
+
     try:
         conn = getConnection()
         cursor = conn.cursor()
 
-        cursor.execute("SELECT cat_id, cat_name from categories")
+        cursor.execute(
+            """
+            INSERT INTO categories (cat_name, user_id)
+            VALUES (%s, %s)
+            RETURNING cat_id, cat_name
+            """,
+            (category.cat_name, user_id)
+        )
+
+        response = cursor.fetchone()
+        conn.commit()
+
+        return {
+            "cat_id": response[0],
+            "cat_name": response[1]
+        }
+
+    except psycopg.errors.UniqueViolation:
+        if conn:
+            conn.rollback()
+
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Category already exists"
+        )
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+
+        print(e)
+
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal Server Error"
+        )
+
+    finally:
+        if cursor:
+            cursor.close()
+
+        if conn:
+            conn.close()
+
+@app.delete("/delete_category/{cat_id}")
+def delete_category(
+    cat_id: int,
+    user_id: int = Depends(verify_access_token)
+):
+    conn = None
+    cursor = None
+
+    try:
+        conn = getConnection()
+        cursor = conn.cursor()
+
+        # Check whether category exists
+        cursor.execute("""
+            SELECT user_id
+            FROM categories
+            WHERE cat_id = %s
+        """, (cat_id,))
+
+        category = cursor.fetchone()
+
+        if not category:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Category not found"
+            )
+
+        # Check ownership
+        if category[0] != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not allowed to delete this category."
+            )
+
+        # Delete category
+        # Tasks are automatically deleted because of ON DELETE CASCADE
+        cursor.execute("""
+            DELETE FROM categories
+            WHERE cat_id = %s
+            AND user_id = %s
+        """, (cat_id, user_id))
+
+        conn.commit()
+
+        return {
+            "message": "Category and its tasks deleted successfully"
+        }
+
+    except HTTPException:
+        if conn:
+            conn.rollback()
+        raise
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+
+        print(e)
+
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal Server Error"
+        )
+
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+# GET CATEGORIES END POINT
+@app.get("/get_category")
+def get_category(
+    user_id: int = Depends(verify_access_token)
+):
+    conn = None
+    cursor = None
+
+    try:
+        conn = getConnection()
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            SELECT cat_id, cat_name
+            FROM categories
+            WHERE user_id = %s
+            ORDER BY cat_id
+            """,
+            (user_id,)
+        )
 
         response = cursor.fetchall()
 
-        if not response:
-            raise HTTPException(
-                status_code = status.HTTP_404_NOT_FOUND,
-                detail = "No Categories"
-            )
+        categories = []
 
-        cat_response = []
-        for resp in response:
-            cat_dict = {
-                "cat_id":resp[0],
-                "cat_name":resp[1]
-            }
+        for category in response:
+            categories.append({
+                "cat_id": category[0],
+                "cat_name": category[1]
+            })
 
-            cat_response.append(cat_dict)
-
-        return cat_response
-
-    except HTTPException:
-        raise
+        return categories
 
     except Exception as e:
         print(e)
 
         raise HTTPException(
-            status_code = status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail = "Internal Server Error"
-        )
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal Server Error"
+        )   
 
     finally:
         if cursor:
@@ -745,6 +1088,72 @@ def get_category():
             conn.close()
     
 
+@app.put("/rename_category/{cat_id}")
+def rename_category(
+    cat_id: int,
+    category: CategoryRename,
+    user_id: int = Depends(verify_access_token)
+):
+    conn = None
+    cursor = None
+
+    try:
+        conn = getConnection()
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            UPDATE categories
+            SET cat_name = %s
+            WHERE cat_id = %s
+            AND user_id = %s
+            """,
+            (category.cat_name, cat_id, user_id)
+        )
+
+        if cursor.rowcount == 0:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Category not found"
+            )
+
+        conn.commit()
+
+        return {
+            "message": "Category renamed successfully"
+        }
+
+    except HTTPException:
+        if conn:
+            conn.rollback()
+        raise
+
+    except psycopg.errors.UniqueViolation:
+        if conn:
+            conn.rollback()
+
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Category already exists"
+        )
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+
+        print(e)
+
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal Server Error"
+        )
+
+    finally:
+        if cursor:
+            cursor.close()
+
+        if conn:
+            conn.close()
 
 # UPDATE-PASSWORD ENDPOINT
 @app.put("/update_password")

@@ -14,11 +14,18 @@ class userLogin(BaseModel):
     email:str
     password:str
 
+
+class CategoryCreate(BaseModel):
+    cat_name: str
+
+class CategoryRename(BaseModel):
+    cat_name: str
+
 # we wrote this before the API so that API call (endpoint) would know what data to expect from the client
 class createTask(BaseModel):
     title:str
     description:str | None = None
-    priority:str = "Imp"
+    priority:str = "Medium"
     due_date:datetime | None = None
     status:str = "todo"
     cat_id:int

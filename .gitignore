@@ -1,15 +1,38 @@
+# Environment files
+
+.env
+.env.*
+!.env.example
+
+
+
 # Python
+
 __pycache__/
 *.pyc
 .venv/
 venv/
 .taskflow/
 
-# Environment files
-.env
 
-# Node
+
+# Node / React
+
 node_modules/
+dist/
 
-# databse-backup
+
+
+# Database backups
+
 *.dump
+*.sql
+
+
+
+# OS / Editor files
+
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

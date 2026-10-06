@@ -1,9 +1,19 @@
+# Python
 __pycache__/
 *.pyc
-.env
-node_modules/
 .venv/
 venv/
+.taskflow/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Node
+node_modules/
+
+# Local files / images
 image copy 2.png
 image copy 3.png
 image copy 4.png

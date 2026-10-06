@@ -5,37 +5,60 @@ export const TASK_STATUSES = [
 ]
 
 export const TASK_PRIORITIES = [
-  { value: 'Least Imp', label: 'Low' },
-  { value: 'Imp', label: 'Medium' },
-  { value: 'Most Imp', label: 'High' },
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
 ]
 
 export const STATUS_META = {
-  todo: { label: 'To Do', badge: 'bg-slate-100 text-slate-700', dot: 'bg-slate-400' },
-  in_progress: { label: 'In Progress', badge: 'bg-sky-100 text-sky-700', dot: 'bg-sky-500' },
-  done: { label: 'Done', badge: 'bg-emerald-100 text-emerald-700', dot: 'bg-emerald-500' },
+  todo: {
+    label: 'To Do',
+    badge: 'bg-slate-100 text-slate-700',
+    dot: 'bg-slate-400',
+  },
+
+  in_progress: {
+    label: 'In Progress',
+    badge: 'bg-sky-100 text-sky-700',
+    dot: 'bg-sky-500',
+  },
+
+  done: {
+    label: 'Done',
+    badge: 'bg-emerald-100 text-emerald-700',
+    dot: 'bg-emerald-500',
+  },
 }
 
 export const PRIORITY_META = {
-  'Least Imp': { label: 'Low', badge: 'bg-slate-100 text-slate-600' },
-  Imp: { label: 'Medium', badge: 'bg-amber-100 text-amber-700' },
-  'Most Imp': { label: 'High', badge: 'bg-red-100 text-red-700' },
+  low: {
+    label: 'Low',
+    badge: 'bg-slate-100 text-slate-600',
+  },
+
+  medium: {
+    label: 'Medium',
+    badge: 'bg-amber-100 text-amber-700',
+  },
+
+  high: {
+    label: 'High',
+    badge: 'bg-red-100 text-red-700',
+  },
 }
 
-export const PRIORITY_RANK = { 'Most Imp': 1, Imp: 2, 'Least Imp': 3 }
-
-const PRIORITY_ALIASES = {
-  low: 'Least Imp',
-  medium: 'Imp',
-  high: 'Most Imp',
-  'least imp': 'Least Imp',
-  imp: 'Imp',
-  'most imp': 'Most Imp',
+export const PRIORITY_RANK = {
+  high: 1,
+  medium: 2,
+  low: 3,
 }
 
 export function normalizePriority(value) {
-  if (value === null || value === undefined || value === '') return value
-  return PRIORITY_ALIASES[String(value).toLowerCase()] ?? value
+  if (value === null || value === undefined || value === '') {
+    return value
+  }
+
+  return String(value).toLowerCase()
 }
 
 export const SORT_OPTIONS = [
