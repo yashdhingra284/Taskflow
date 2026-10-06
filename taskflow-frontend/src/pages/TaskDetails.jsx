@@ -10,6 +10,7 @@ import { ConfirmDialog } from '../components/ui/ConfirmDialog.jsx'
 import { ErrorState } from '../components/ui/Feedback.jsx'
 import { Icon } from '../components/ui/icons.jsx'
 import { TaskFormModal } from '../components/tasks/TaskFormModal.jsx'
+import { normalizePriority } from '../lib/constants.js'
 
 export function TaskDetails() {
   const { id } = useParams()
@@ -215,11 +216,11 @@ function DetailItem({ label, value }) {
 }
 
 const STATUS_LABELS = { todo: 'To Do', in_progress: 'In Progress', done: 'Done' }
-const PRIORITY_LABELS = { low: 'Low', medium: 'Medium', high: 'High' }
+const PRIORITY_LABELS = { 'Least Imp': 'Low', Imp: 'Medium', 'Most Imp': 'High' }
 
 function statusLabel(status) {
   return STATUS_LABELS[status] ?? status
 }
 function priorityLabel(priority) {
-  return PRIORITY_LABELS[priority] ?? priority
+  return PRIORITY_LABELS[normalizePriority(priority)] ?? normalizePriority(priority)
 }

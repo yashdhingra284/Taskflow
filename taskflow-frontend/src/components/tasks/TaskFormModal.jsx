@@ -25,7 +25,6 @@ function validate(form) {
   }
 
   if (!form.cat_id) errors.cat_id = 'Category is required.'
-  if (!form.due_date) errors.due_date = 'Due date is required.'
   return errors
 }
 
@@ -47,7 +46,7 @@ export function TaskFormModal({ open, onClose, task = null, onSaved }) {
         title: task.title ?? '',
         description: task.description ?? '',
         status: task.status ?? 'todo',
-        priority: task.priority ?? 'medium',
+        priority: task.priority ?? 'Imp',
         due_date: task.due_date ? task.due_date.slice(0, 10) : '',
         cat_id: task.cat_id ?? '',
       })

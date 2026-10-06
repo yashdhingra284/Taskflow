@@ -3,8 +3,8 @@ import { request, setToken, getToken } from './http.js'
 import { mockApi } from './mock.js'
 
 // Auth API contract (FastAPI):
-//   POST /auth/login    { email, password }            -> { access_token, user }
-//   POST /auth/register { name, email, password }      -> { access_token, user }
+//   POST /loginuser    { email, password }            -> { access_token, token_type }
+//   POST /registeruser { name, email, password }      -> { access_token, token_type }
 //   GET  /users/me                                     -> user
 
 export const authApi = USE_MOCK
@@ -28,20 +28,14 @@ export const authApi = USE_MOCK
     }
   : {
       async login(credentials) {
-        const token = await request('/loginuser', { method: 'POST', body: credentials })
-        setToken(token)
-        return { access_token: token}
+        const res = await request('/loginuser', { method: 'POST', body: credentials })
+        setToken(res.access_token)
+        return res
       },
       async register(payload) {
         const res = await request('/registeruser', { method: 'POST', body: payload })
         setToken(res.access_token)
         return res
-      },
-      async updatePassword(payload){
-        return request('/update_password',{
-          method:'PUT',
-          body: JSON.stringify(payload),
-        })
       },
       async me() {
         return request('/users/me')

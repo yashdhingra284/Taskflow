@@ -9,10 +9,10 @@ import { mockApi } from './mock.js'
 //   GET    /tasks/:id                                                    -> Task
 //   PUT    /tasks/:id  { title, description, status, priority, due_date } -> Task
 //   DELETE /tasks/:id                                                    -> 204
-//   Task: { id, title, description, status, priority, due_date,
+//   Task: { id, title, description, status, priority, due_date, category, cat_id,
 //           created_at, updated_at }
 
-const pickTask = ({ id, title, description, status, priority, due_date, created_at, updated_at }) => ({
+const pickTask = ({ id, title, description, status, priority, due_date, created_at, updated_at, cat_id, category, cat_name }) => ({
   id,
   title,
   description,
@@ -21,6 +21,8 @@ const pickTask = ({ id, title, description, status, priority, due_date, created_
   due_date,
   created_at,
   updated_at,
+  cat_id: cat_id ?? null,
+  category: category ?? cat_name ?? null,
 })
 
 export const tasksApi = USE_MOCK
@@ -70,7 +72,9 @@ return request('/gettask', {
     due_date: task.Due_Date,
     status: task.Status,
     category: task.Category,
-    cat_id: task.cat_id
+    cat_id: task.cat_id,
+    created_at: task.created_at,
+    updated_at: task.updated_at,
   })),
   total: res.total,
   page,
@@ -87,6 +91,8 @@ get(id) {
     status: task.status,
     category: task.cat_name,
     cat_id: task.cat_id,
+    created_at: task.created_at,
+    updated_at: task.updated_at,
   }))
 },
       create(data) {
@@ -113,8 +119,10 @@ search(query, page = 1, page_size = 12, filters = {}) {
       priority: task.priority,
       due_date: task.due_date,
       status: task.status,
-      category: task.category,
+      category: task.cat_name,
       cat_id: task.cat_id,
+      created_at: task.created_at,
+      updated_at: task.updated_at,
     })),
     total: res.total,
     page,

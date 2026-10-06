@@ -1,4 +1,5 @@
 import { cn } from '../../lib/utils.js'
+import { normalizePriority } from '../../lib/constants.js'
 
 const STATUS_DOT = {
   todo: 'bg-slate-400',
@@ -22,15 +23,16 @@ export function StatusBadge({ status, className = '' }) {
 }
 
 export function PriorityBadge({ priority, className = '' }) {
+  const key = normalizePriority(priority)
   return (
     <span
       className={cn(
         'inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold',
-        PRIORITY_BG[priority] ?? 'bg-slate-100 text-slate-600',
+        PRIORITY_BG[key] ?? 'bg-slate-100 text-slate-600',
         className,
       )}
     >
-      {PRIORITY_LABEL[priority] ?? priority}
+      {PRIORITY_LABEL[key] ?? key}
     </span>
   )
 }
@@ -48,13 +50,13 @@ const STATUS_LABEL = {
 }
 
 const PRIORITY_BG = {
-  low: 'bg-slate-100 text-slate-600',
-  medium: 'bg-amber-100 text-amber-700',
-  high: 'bg-red-100 text-red-700',
+  'Least Imp': 'bg-slate-100 text-slate-600',
+  Imp: 'bg-amber-100 text-amber-700',
+  'Most Imp': 'bg-red-100 text-red-700',
 }
 
 const PRIORITY_LABEL = {
-  low: 'Low',
-  medium: 'Medium',
-  high: 'High',
+  'Least Imp': 'Low',
+  Imp: 'Medium',
+  'Most Imp': 'High',
 }

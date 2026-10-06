@@ -17,10 +17,10 @@ class userLogin(BaseModel):
 # we wrote this before the API so that API call (endpoint) would know what data to expect from the client
 class createTask(BaseModel):
     title:str
-    description:str
+    description:str | None = None
     priority:str = "Imp"
-    due_date:datetime
-    status:str = "Started"
+    due_date:datetime | None = None
+    status:str = "todo"
     cat_id:int
 
 

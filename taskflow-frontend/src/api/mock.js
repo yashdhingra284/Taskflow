@@ -1,5 +1,6 @@
 import { ApiError } from './http.js'
 import { getDb, saveDbAndReturn, DEMO_EMAIL, DEMO_PASSWORD } from './mockDb.js'
+import { normalizePriority } from '../lib/constants.js'
 
 const LATENCY = 450
 
@@ -86,7 +87,7 @@ export const mockApi = {
       )
     }
     if (status && status !== 'all') items = items.filter((t) => t.status === status)
-    if (priority && priority !== 'all') items = items.filter((t) => t.priority === priority)
+    if (priority && priority !== 'all') items = items.filter((t) => normalizePriority(t.priority) === normalizePriority(priority))
 
     if (due && due !== 'all') {
       const today = new Date()
@@ -106,7 +107,7 @@ export const mockApi = {
       }
     }
 
-    const priorityRank = { high: 0, medium: 1, low: 2 }
+    const priorityRank = { 'Most Imp': 0, Imp: 1, 'Least Imp': 2 }
     const sorters = {
       newest: (a, b) => new Date(b.created_at) - new Date(a.created_at),
       oldest: (a, b) => new Date(a.created_at) - new Date(b.created_at),
@@ -116,7 +117,7 @@ export const mockApi = {
         if (!b.due_date) return -1
         return new Date(a.due_date) - new Date(b.due_date)
       },
-      priority: (a, b) => priorityRank[a.priority] - priorityRank[b.priority],
+      priority: (a, b) => priorityRank[normalizePriority(a.priority)] - priorityRank[normalizePriority(b.priority)],
       title: (a, b) => a.title.localeCompare(b.title),
     }
     items.sort(sorters[sort ?? 'newest'])
@@ -173,7 +174,7 @@ items: paged.map(
       title: data.title,
       description: data.description ?? '',
       status: data.status ?? 'todo',
-      priority: data.priority ?? 'medium',
+      priority: data.priority ?? 'Imp',
       due_date: data.due_date ?? null,
       created_at: now,
       updated_at: now,

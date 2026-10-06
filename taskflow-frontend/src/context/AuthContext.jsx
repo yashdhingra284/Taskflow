@@ -26,16 +26,17 @@ export function AuthProvider({ children }) {
   }, [])
 
   const login = useCallback(async (credentials) => {
-    const res = await authApi.login(credentials)
+    await authApi.login(credentials)
     const user = await authApi.me()
     setUser(user)
     return user
   }, [])
 
   const register = useCallback(async (payload) => {
-    const res = await authApi.register(payload)
-    setUser(res.user)
-    return res.user
+    await authApi.register(payload)
+    const user = await authApi.me()
+    setUser(user)
+    return user
   }, [])
 
   const logout = useCallback(() => {

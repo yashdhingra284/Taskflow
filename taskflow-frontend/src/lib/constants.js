@@ -17,9 +17,25 @@ export const STATUS_META = {
 }
 
 export const PRIORITY_META = {
-  low: { label: 'Low', badge: 'bg-slate-100 text-slate-600' },
-  medium: { label: 'Medium', badge: 'bg-amber-100 text-amber-700' },
-  high: { label: 'High', badge: 'bg-red-100 text-red-700' },
+  'Least Imp': { label: 'Low', badge: 'bg-slate-100 text-slate-600' },
+  Imp: { label: 'Medium', badge: 'bg-amber-100 text-amber-700' },
+  'Most Imp': { label: 'High', badge: 'bg-red-100 text-red-700' },
+}
+
+export const PRIORITY_RANK = { 'Most Imp': 1, Imp: 2, 'Least Imp': 3 }
+
+const PRIORITY_ALIASES = {
+  low: 'Least Imp',
+  medium: 'Imp',
+  high: 'Most Imp',
+  'least imp': 'Least Imp',
+  imp: 'Imp',
+  'most imp': 'Most Imp',
+}
+
+export function normalizePriority(value) {
+  if (value === null || value === undefined || value === '') return value
+  return PRIORITY_ALIASES[String(value).toLowerCase()] ?? value
 }
 
 export const SORT_OPTIONS = [

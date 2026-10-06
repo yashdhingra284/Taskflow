@@ -44,7 +44,7 @@ def get_current_user(user_id:int = Depends(verify_access_token)):
     try:
         conn = getConnection()
         cursor = conn.cursor()
-        cursor.execute("SELECT name,email FROM users WHERE user_id = %s",(user_id,))
+        cursor.execute("SELECT user_id,name,email,created_at FROM users WHERE user_id = %s",(user_id,))
 
         response = cursor.fetchone()
 
@@ -55,8 +55,10 @@ def get_current_user(user_id:int = Depends(verify_access_token)):
             )
 
         task_response = {
-            "name":response[0],
-            "email":response[1]
+            "user_id":response[0],
+            "name":response[1],
+            "email":response[2],
+            "created_at":response[3]
         }
 
         return task_response
@@ -107,16 +109,21 @@ def newregistration(user : userRegistration):
         ).decode("utf-8")
 
         cursor.execute(
-                "INSERT INTO users(name, email, password) VALUES (%s, %s, %s)",
+                "INSERT INTO users(name, email, password) VALUES (%s, %s, %s) RETURNING user_id",
                 (
                     user.name,
                     user.email,
                     hashed_password
                 )
             )
+        new_user_id = cursor.fetchone()[0]
         # the entry have not been made permanently in the db yet so we do this
         conn.commit()
-        return "New User Added."
+        token = create_access_token({"user_id": new_user_id})
+        return {
+            "access_token": token,
+            "token_type": "bearer"
+        }
     except HTTPException:
         raise
 
@@ -181,7 +188,11 @@ def userlogin(user: userLogin):
             "user_id":existing_user[2]
         }
 
-        return create_access_token(data)
+        token = create_access_token(data)
+        return {
+            "access_token": token,
+            "token_type": "bearer"
+        }
 
     except HTTPException:
         raise
@@ -202,20 +213,6 @@ def userlogin(user: userLogin):
         if conn:
             conn.close()
 
-
-# PRACTICE ENDPOINT -- WE ARE MAKING THIS ENDPOINT JUST TO TEST THE VERIFY_ACCESS_TOKEN FUNCTION.
-@app.get("/verify")
-# since we used dependency injection on verify_token_access in auth.py so whenever this function will be called it will 
-# itself say to FastAPI to call the oaut2scheme class which will read the bearer token from the request header and that 
-# token would be passed to the verify_access_token function which would give the user_id and since in this verify endpoint 
-# we want user_id only so we write which means whenever this verify function will be called you need to call verify_access_token
-# function first
-
-def verify(user_id: int = Depends(verify_access_token)):
-    return {
-        "message":"Verified",
-        "user_id":user_id
-    }
 
 # THIRD ENDPOINT
 @app.post("/createTask")
@@ -337,7 +334,9 @@ def get_user_task(
                 t.status,
                 c.cat_name,
                 t.task_id,
-                t.cat_id
+                t.cat_id,
+                t.created_at,
+                t.updated_at
             FROM tasks t
             LEFT JOIN categories c
             ON t.cat_id = c.cat_id
@@ -367,7 +366,9 @@ def get_user_task(
                     "Status":task[4],
                     "Category":task[5],
                     "task_id":task[6],
-                     "cat_id": task[7]
+                     "cat_id": task[7],
+                     "created_at": task[8],
+                     "updated_at": task[9]
                 }
                 task_responses.append(task_dict)
                 counter = counter + 1
@@ -413,7 +414,9 @@ def get_task_by_id(task_id:int, user_id:int = Depends(verify_access_token)):
                 t.due_date,
                 t.status,
                 c.cat_name,
-                t.cat_id
+                t.cat_id,
+                t.created_at,
+                t.updated_at
             FROM tasks t
             LEFT JOIN categories c
             ON t.cat_id = c.cat_id
@@ -437,7 +440,9 @@ def get_task_by_id(task_id:int, user_id:int = Depends(verify_access_token)):
             "due_date":response[4],
             "status":response[5],
             "cat_name":response[6],
-            "cat_id":response[7]
+            "cat_id":response[7],
+            "created_at":response[8],
+            "updated_at":response[9]
         }
 
         return task_response
@@ -473,7 +478,8 @@ def update_task_by_id(task_id: int, update_Task: createTask, user_id:int = Depen
                     priority = %s,
                     due_date = %s,
                     status = %s,
-                    cat_id = %s
+                    cat_id = %s,
+                    updated_at = CURRENT_TIMESTAMP
                     WHERE task_id = %s
                     AND
                     user_id = %s""", (update_Task.title, update_Task.description, update_Task.priority, update_Task.due_date, update_Task.status, update_Task.cat_id, task_id,user_id,)
@@ -499,7 +505,9 @@ def update_task_by_id(task_id: int, update_Task: createTask, user_id:int = Depen
                             t.due_date,
                             t.status,
                             c.cat_name,
-                            t.cat_id
+                            t.cat_id,
+                            t.created_at,
+                            t.updated_at
                             FROM tasks t
                             LEFT JOIN categories c
                             ON t.cat_id = c.cat_id
@@ -515,7 +523,9 @@ def update_task_by_id(task_id: int, update_Task: createTask, user_id:int = Depen
             "due_date": response[4],
             "status": response[5],
             "cat_name": response[6],
-            "cat_id":response[7]
+            "cat_id":response[7],
+            "created_at": response[8],
+            "updated_at": response[9]
         }
 
         return frontend_response
@@ -635,7 +645,10 @@ def search_task(
             t.priority,
             t.due_date,
             t.status,
-            t.cat_id
+            c.cat_name,
+            t.cat_id,
+            t.created_at,
+            t.updated_at
             FROM tasks t
             LEFT JOIN categories c
             ON t.cat_id = c.cat_id
@@ -660,7 +673,10 @@ def search_task(
             "priority": task[3],
             "due_date": task[4],
             "status": task[5],
-            "cat_id": task[6]
+            "cat_name": task[6],
+            "cat_id": task[7],
+            "created_at": task[8],
+            "updated_at": task[9]
         })
         return {
             "items": search_results,
@@ -680,174 +696,6 @@ def search_task(
         if conn:
             conn.close()
 
-#NINTH ENDPOINT
-@app.get("/filter_task")
-def filter_tasks(status: str | None = None,
-                priority: str | None = None,
-                category: str | None = None,
-                user_id: int = Depends(verify_access_token)):
-    try:
-        conn = getConnection()
-        cursor = conn.cursor()
-
-        query = """
-                SELECT 
-                t.task_id,
-                t.title,
-                t.description,
-                t.priority,
-                t.due_date,
-                t.status,
-                c.cat_name 
-                FROM tasks t LEFT JOIN categories c
-                ON t.cat_id = c.cat_id
-                WHERE t.user_id = %s"""
-        params = [user_id]
-
-        if status is not None:
-            query += " AND t.status = %s"
-            params.append(status)
-
-        if priority is not None:
-            query += " AND t.priority = %s"
-            params.append(priority)
-
-        if category is not None:
-            query += " AND c.cat_name %s"
-            params.append(category)
-
-        cursor.execute(query,tuple(params))
-
-        tasks = cursor.fetchall()
-
-        if not tasks:
-            raise HTTPException(
-                status_code = status.HTTP_404_NOT_FOUND,
-                detail = "No Such Tasks"
-            )
-
-        task_responses = []
-
-        for task in tasks:
-            task_dict = {
-                "task_id": task[0],
-                "title": task[1],
-                "description": task[2],
-                "priority": task[3],
-                "due_date": task[4],
-                "status": task[5],
-                "category": task[6]
-            }
-
-            task_responses.append(task_dict)
-
-        return task_responses
-
-    except HTTPException:
-        raise
-
-    except Exception as e:
-        print(e)
-        raise HTTPException(
-            status_code = status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail = "Internal Server Error"
-        )
-
-    finally:
-        if cursor:
-            cursor.close()
-
-        if conn:
-            conn.close()
-
-#TENTH ENDPOINT
-@app.get("/sort_tasks")
-def sort_tasks(sort_by: str,order_by: str, user_id:int = Depends(verify_access_token)):
-    try:
-        conn = getConnection()
-        cursor = conn.cursor()
-
-        allowed_columns = {
-            "title" : "t.title",
-            "priority" : "t.priority",
-            "due_date" : "t.due_date",
-            "status" : "t.status"
-        }
-
-        allowed_order = {
-            "Ascending" : "ASC",
-            "Descending":"DESC"
-        }
-
-        column = allowed_columns.get(sort_by)
-        order = allowed_order.get(order_by)
-
-        if not column:
-            raise HTTPException(
-                status_code = status.HTTP_400_BAD_REQUEST,
-                detail = "Sorting Column Not Found"
-            )
-
-        if not order:
-            raise HTTPException(
-                status_code = status.HTTP_400_BAD_REQUEST,
-                detail = "Sorting Order Not Found"
-            )
-
-        query = """
-                SELECT
-                    t.task_id,
-                    t.title,
-                    t.description,
-                    t.priority,
-                    t.due_date,
-                    t.status,
-                    c.cat_name
-                FROM tasks t
-                LEFT JOIN categories c
-                ON t.cat_id = c.cat_id
-                WHERE t.user_id = %s
-                """
-
-        params = [user_id]
-        query = query + f" ORDER BY {column} {order}"
-        cursor.execute(query , tuple(params),)
-
-        tasks = cursor.fetchall()
-        task_responses = []
-
-        for task in tasks:
-            task_dict = {
-                "task_id": task[0],
-                "title": task[1],
-                "description": task[2],
-                "priority": task[3],
-                "due_date": task[4],
-                "status": task[5],
-                "category": task[6]
-            }
-
-            task_responses.append(task_dict)
-
-        return task_responses
-
-
-    except HTTPException:
-        raise
-
-    except Exception as e:
-        print(e)
-        raise HTTPException(
-            status_code = status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail = "Internal Server Error"
-        )
-
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-        
 # GET CATEGORIES END POINT
 @app.get("/get_category")
 def get_category():

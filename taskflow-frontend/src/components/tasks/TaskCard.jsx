@@ -6,7 +6,6 @@ import { useToast } from '../../context/ToastContext.jsx'
 import { formatDate, isOverdue, cn } from '../../lib/utils.js'
 import { StatusBadge, PriorityBadge } from '../ui/Badge.jsx'
 import { Icon } from '../ui/icons.jsx'
-import { TASK_PRIORITIES } from "../../lib/constants.js"
 
 
 export function TaskCard({ task, onEdit, onChanged }) {
@@ -73,7 +72,7 @@ export function TaskCard({ task, onEdit, onChanged }) {
 
       <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-4">
         <StatusBadge status={task.status} />
-        <PriorityBadge priority={TASK_PRIORITIES.find(p => p.value === task.priority)?.label} />
+        <PriorityBadge priority={task.priority} />
       </div>
 
       <div className="mt-3 flex items-center justify-between gap-2 border-t border-slate-100 pt-3">
