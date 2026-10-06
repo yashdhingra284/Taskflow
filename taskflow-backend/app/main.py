@@ -29,7 +29,7 @@ def start_scheduler():
     print("[Scheduler] Started")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://taskflow-frontend-vi25.onrender.com",
+    allow_origins=["https://taskflow-frontend-two-plum.vercel.app",
                    "http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
